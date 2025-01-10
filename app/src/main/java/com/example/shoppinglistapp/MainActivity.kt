@@ -24,6 +24,8 @@ import com.example.shoppinglistapp.ui.theme.ShoppingListAppTheme
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.shoppinglistapp.repository.ShoppingRepository
+import com.example.shoppinglistapp.viewmodel.ShoppingViewModel
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -140,6 +142,19 @@ fun ShoppingListScreen(navController: NavHostController) {
     val db = ShoppingDatabase.getDatabase(context)
     val dao = db.shoppingDao()
     val scope = rememberCoroutineScope()
+
+    val viewModel = remember {
+        ShoppingViewModel(
+            ShoppingRepository(
+                ShoppingDatabase.getDatabase(context).shoppingDao()
+            )
+        )
+    }
+
+    // Fetching items from the API when the screen loads
+    LaunchedEffect(Unit) {
+        viewModel.fetchItems()
+    }
 
     val scaffoldState = rememberScaffoldState()
 
