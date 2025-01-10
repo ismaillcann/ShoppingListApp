@@ -8,7 +8,12 @@ import com.example.shoppinglistapp.network.RetrofitInstance
 class ShoppingRepository(private val dao: ShoppingDao) {
 
     suspend fun fetchShoppingItemsFromApi(): List<ApiShoppingItem> {
-        return RetrofitInstance.api.getShoppingItems()
+        return try {
+            RetrofitInstance.api.getShoppingItems()
+        } catch (e: Exception) {
+            println("API Error: ${e.message}")
+            emptyList()
+        }
     }
 
     suspend fun insertShoppingItem(item: ShoppingItem) {

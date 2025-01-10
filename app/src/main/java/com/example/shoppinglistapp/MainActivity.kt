@@ -9,7 +9,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -73,6 +77,7 @@ fun EditItemDialog(
     var name by remember { mutableStateOf(item.name) }
     var quantity by remember { mutableStateOf(item.quantity.toString()) }
     var price by remember { mutableStateOf((item.price / item.quantity).toString()) } // Calculate unit price
+    var errorMessage by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -83,24 +88,34 @@ fun EditItemDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = name.isBlank()
                 )
+                if (name.isBlank()) {
+                    Text(
+                        "Name cannot be empty",
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
                 TextField(
                     value = quantity,
                     onValueChange = { input ->
-                        val newQuantity = input.toIntOrNull() ?: 0
-                        if (newQuantity > 0) {
-                            // Update quantity and calculate price
-                            quantity = newQuantity.toString()
-                            price = ((item.price / item.quantity) * newQuantity).toString()
+                        quantity = input
+                        if (input.toIntOrNull() == null || input.toInt() <= 0) {
+                            errorMessage = "Quantity must be a positive number"
+                        } else {
+                            errorMessage = ""
                         }
                     },
                     label = { Text("Quantity") },
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Number
-                    )
+                    ),
+                    isError = errorMessage.isNotEmpty()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 TextField(
@@ -112,17 +127,30 @@ fun EditItemDialog(
                         keyboardType = KeyboardType.Decimal
                     )
                 )
+                if (errorMessage.isNotEmpty()) {
+                    Text(
+                        errorMessage,
+                        color = MaterialTheme.colors.error,
+                        style = MaterialTheme.typography.caption
+                    )
+                }
             }
         },
         confirmButton = {
-            Button(onClick = {
-                val updatedItem = item.copy(
-                    name = name.trim(),
-                    quantity = quantity.toIntOrNull() ?: item.quantity,
-                    price = price.toDoubleOrNull() ?: item.price
-                )
-                onSave(updatedItem)
-            }) {
+            Button(
+                onClick = {
+                    if (name.isNotBlank() && quantity.toIntOrNull() != null && quantity.toInt() > 0) {
+                        val updatedItem = item.copy(
+                            name = name.trim(),
+                            quantity = quantity.toInt(),
+                            price = price.toDoubleOrNull() ?: item.price
+                        )
+                        onSave(updatedItem)
+                    } else {
+                        errorMessage = "Invalid inputs. Ensure all fields are valid."
+                    }
+                }
+            ) {
                 Text("Save")
             }
         },
@@ -136,13 +164,10 @@ fun EditItemDialog(
 
 
 
+
 @Composable
 fun ShoppingListScreen(navController: NavHostController) {
     val context = LocalContext.current
-    val db = ShoppingDatabase.getDatabase(context)
-    val dao = db.shoppingDao()
-    val scope = rememberCoroutineScope()
-
     val viewModel = remember {
         ShoppingViewModel(
             ShoppingRepository(
@@ -151,121 +176,94 @@ fun ShoppingListScreen(navController: NavHostController) {
         )
     }
 
-    // Fetching items from the API when the screen loads
+    // Observe shopping items from the ViewModel
+    val shoppingItems = viewModel.shoppingItems.value
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Fetch items on first load
     LaunchedEffect(Unit) {
-        viewModel.fetchItems()
-    }
-
-    val scaffoldState = rememberScaffoldState()
-
-    // State to hold shopping items
-    var shoppingItems by remember { mutableStateOf(emptyList<ShoppingItem>()) }
-    var itemName by remember { mutableStateOf("") }
-    var itemQuantity by remember { mutableStateOf(1) }
-    var itemPrice by remember { mutableStateOf(0.0) }
-
-    // Dialog state for editing
-    var showEditDialog by remember { mutableStateOf(false) }
-    var selectedItem by remember { mutableStateOf<ShoppingItem?>(null) }
-
-    // Load all items initially
-    LaunchedEffect(Unit) {
-        shoppingItems = dao.getAllItems()
+        isLoading = true
+        viewModel.fetchItems(context)
+        isLoading = false
     }
 
     Scaffold(
-        scaffoldState = scaffoldState,
         topBar = { TopAppBar(title = { Text("Shopping List") }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = {
-                scope.launch {
-                    try {
-                        if (itemName.isBlank() || itemQuantity <= 0 || itemPrice <= 0.0) {
-                            scaffoldState.snackbarHostState.showSnackbar(
-                                "Invalid inputs. Ensure all fields are filled correctly."
-                            )
-                        } else {
-                            dao.insertItem(
-                                ShoppingItem(name = itemName, quantity = itemQuantity, price = itemPrice)
-                            )
-                            itemName = ""
-                            itemQuantity = 1
-                            itemPrice = 0.0
-                            shoppingItems = dao.getAllItems()
-                        }
-                    } catch (e: Exception) {
-                        scaffoldState.snackbarHostState.showSnackbar(
-                            "Error inserting item: ${e.message}"
-                        )
-                    }
-                }
-            }) {
-                Text("Add")
+            FloatingActionButton(onClick = { /* Add new item logic */ }) {
+                Text("+")
             }
         }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(16.dp)) {
-            // Input Fields
-            TextField(
-                value = itemName,
-                onValueChange = { itemName = it },
-                label = { Text("Name") },
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            TextField(
-                value = itemQuantity.toString(),
-                onValueChange = { input -> itemQuantity = input.toIntOrNull() ?: 0 },
-                label = { Text("Quantity") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            TextField(
-                value = itemPrice.toString(),
-                onValueChange = { input -> itemPrice = input.toDoubleOrNull() ?: 0.0 },
-                label = { Text("Price") },
-                modifier = Modifier.fillMaxWidth(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // List of Shopping Items
-            LazyColumn {
-                items(shoppingItems) { item ->
-                    ShoppingItemRow(
-                        item = item,
-                        navController = navController,
-                        onDelete = {
-                            scope.launch {
-                                dao.deleteItemById(it.id)
-                                shoppingItems = dao.getAllItems()
-                            }
-                        },
-                        onEdit = {
-                            selectedItem = it
-                            showEditDialog = true
-                        }
+            when {
+                isLoading -> {
+                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
+                shoppingItems.isEmpty() -> {
+                    Text(
+                        "No items available. Check your connection or add items manually.",
+                        style = MaterialTheme.typography.h6,
+                        modifier = Modifier.align(Alignment.CenterHorizontally)
                     )
+                }
+                else -> {
+                    LazyColumn {
+                        items(shoppingItems) { item ->
+                            ShoppingItemCard(
+                                item = item,
+                                navController = navController,
+                                onDelete = { selectedItem ->
+                                    viewModel.deleteItem(selectedItem)
+                                },
+                                onEdit = { /* Handle edit */ }
+                            )
+                        }
+                    }
                 }
             }
         }
+    }
+}
 
-        if (showEditDialog && selectedItem != null) {
-            EditItemDialog(
-                item = selectedItem!!,
-                onDismiss = { showEditDialog = false },
-                onSave = { updatedItem ->
-                    scope.launch {
-                        dao.updateItem(updatedItem)
-                        shoppingItems = dao.getAllItems()
-                    }
-                    showEditDialog = false
+@Composable
+fun ShoppingItemCard(
+    item: ShoppingItem,
+    navController: NavHostController,
+    onDelete: (ShoppingItem) -> Unit,
+    onEdit: (ShoppingItem) -> Unit
+) {
+    Card(
+        elevation = 4.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(8.dp)
+            .clickable { navController.navigate("details/${item.id}") }
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = item.name, style = MaterialTheme.typography.h6)
+                Text(
+                    text = "Qty: ${item.quantity}, Price: $${item.price}",
+                    style = MaterialTheme.typography.body2
+                )
+            }
+            Row {
+                IconButton(onClick = { onEdit(item) }) {
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
                 }
-            )
+                IconButton(onClick = { onDelete(item) }) {
+                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
+                }
+            }
         }
     }
 }
+
+
 
 @Composable
 fun ShoppingItemRow(
@@ -314,21 +312,28 @@ fun ShoppingDetailsScreen(itemId: String?) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Item Details") }) }
     ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .padding(16.dp)
-        ) {
-            shoppingItem?.let {
-                Text("Name: ${it.name}", style = MaterialTheme.typography.h5)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Quantity: ${it.quantity}", style = MaterialTheme.typography.body1)
-                Spacer(modifier = Modifier.height(8.dp))
-                Text("Price: $${it.price}", style = MaterialTheme.typography.body1)
-            } ?: Text("Loading item details...")
-        }
+        shoppingItem?.let {
+            Card(
+                elevation = 4.dp,
+                modifier = Modifier
+                    .padding(paddingValues)
+                    .padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Name: ${it.name}", style = MaterialTheme.typography.h5)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Quantity: ${it.quantity}", style = MaterialTheme.typography.body1)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text("Price: $${it.price}", style = MaterialTheme.typography.body1)
+                }
+            }
+        } ?: Text(
+            "Loading item details...",
+            modifier = Modifier.padding(paddingValues).padding(16.dp)
+        )
     }
 }
+
 
 @Preview(showBackground = true)
 @Composable
