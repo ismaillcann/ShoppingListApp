@@ -16,6 +16,11 @@ class ShoppingRepository(private val dao: ShoppingDao) {
         }
     }
 
+    suspend fun updateItem(item: ShoppingItem) {
+        dao.updateItem(item)
+    }
+
+
     suspend fun insertShoppingItem(item: ShoppingItem) {
         dao.insertItem(item)
     }

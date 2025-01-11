@@ -30,6 +30,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.shoppinglistapp.repository.ShoppingRepository
 import com.example.shoppinglistapp.viewmodel.ShoppingViewModel
+import androidx.compose.runtime.collectAsState
+
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -76,8 +78,7 @@ fun EditItemDialog(
 ) {
     var name by remember { mutableStateOf(item.name) }
     var quantity by remember { mutableStateOf(item.quantity.toString()) }
-    var price by remember { mutableStateOf((item.price / item.quantity).toString()) } // Calculate unit price
-    var errorMessage by remember { mutableStateOf("") }
+    var price by remember { mutableStateOf((item.price / item.quantity).toString()) } // Unit price
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -88,34 +89,21 @@ fun EditItemDialog(
                     value = name,
                     onValueChange = { name = it },
                     label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    isError = name.isBlank()
+                    modifier = Modifier.fillMaxWidth()
                 )
-                if (name.isBlank()) {
-                    Text(
-                        "Name cannot be empty",
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption
-                    )
-                }
-
                 Spacer(modifier = Modifier.height(8.dp))
                 TextField(
                     value = quantity,
                     onValueChange = { input ->
-                        quantity = input
-                        if (input.toIntOrNull() == null || input.toInt() <= 0) {
-                            errorMessage = "Quantity must be a positive number"
-                        } else {
-                            errorMessage = ""
+                        val newQuantity = input.toIntOrNull() ?: 0
+                        if (newQuantity > 0) {
+                            quantity = newQuantity.toString()
+                            price = ((item.price / item.quantity) * newQuantity).toString()
                         }
                     },
                     label = { Text("Quantity") },
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number
-                    ),
-                    isError = errorMessage.isNotEmpty()
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 TextField(
@@ -123,34 +111,19 @@ fun EditItemDialog(
                     onValueChange = { price = it },
                     label = { Text("Price") },
                     modifier = Modifier.fillMaxWidth(),
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal
-                    )
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal)
                 )
-                if (errorMessage.isNotEmpty()) {
-                    Text(
-                        errorMessage,
-                        color = MaterialTheme.colors.error,
-                        style = MaterialTheme.typography.caption
-                    )
-                }
             }
         },
         confirmButton = {
-            Button(
-                onClick = {
-                    if (name.isNotBlank() && quantity.toIntOrNull() != null && quantity.toInt() > 0) {
-                        val updatedItem = item.copy(
-                            name = name.trim(),
-                            quantity = quantity.toInt(),
-                            price = price.toDoubleOrNull() ?: item.price
-                        )
-                        onSave(updatedItem)
-                    } else {
-                        errorMessage = "Invalid inputs. Ensure all fields are valid."
-                    }
-                }
-            ) {
+            Button(onClick = {
+                val updatedItem = item.copy(
+                    name = name.trim(),
+                    quantity = quantity.toIntOrNull() ?: item.quantity,
+                    price = price.toDoubleOrNull() ?: item.price
+                )
+                onSave(updatedItem)
+            }) {
                 Text("Save")
             }
         },
@@ -161,6 +134,7 @@ fun EditItemDialog(
         }
     )
 }
+
 
 
 
@@ -177,14 +151,14 @@ fun ShoppingListScreen(navController: NavHostController) {
     }
 
     // Observe shopping items from the ViewModel
-    val shoppingItems = viewModel.shoppingItems.value
-    var isLoading by remember { mutableStateOf(true) }
+    val shoppingItems = viewModel.shoppingItems.collectAsState(emptyList())
+
+    var selectedItem by remember { mutableStateOf<ShoppingItem?>(null) } // Use var for reassignment
+    var showEditDialog by remember { mutableStateOf(false) }
 
     // Fetch items on first load
     LaunchedEffect(Unit) {
-        isLoading = true
         viewModel.fetchItems(context)
-        isLoading = false
     }
 
     Scaffold(
@@ -196,35 +170,43 @@ fun ShoppingListScreen(navController: NavHostController) {
         }
     ) { paddingValues ->
         Column(modifier = Modifier.padding(paddingValues).padding(16.dp)) {
-            when {
-                isLoading -> {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                }
-                shoppingItems.isEmpty() -> {
-                    Text(
-                        "No items available. Check your connection or add items manually.",
-                        style = MaterialTheme.typography.h6,
-                        modifier = Modifier.align(Alignment.CenterHorizontally)
-                    )
-                }
-                else -> {
-                    LazyColumn {
-                        items(shoppingItems) { item ->
-                            ShoppingItemCard(
-                                item = item,
-                                navController = navController,
-                                onDelete = { selectedItem ->
-                                    viewModel.deleteItem(selectedItem)
-                                },
-                                onEdit = { /* Handle edit */ }
-                            )
-                        }
+            if (shoppingItems.value.isEmpty()) {
+                Text("No items available. Check your connection or add items manually.")
+            } else {
+                LazyColumn {
+                    items(shoppingItems.value) { shoppingItem ->
+                        ShoppingItemCard(
+                            item = shoppingItem,
+                            navController = navController,
+                            onDelete = { selectedItem ->
+                                viewModel.deleteItem(selectedItem)
+                            },
+                            onEdit = { shoppingItem ->
+                                selectedItem = shoppingItem // Update selectedItem here
+                                showEditDialog = true
+                            }
+                        )
                     }
                 }
             }
         }
+
+        // Edit Dialog
+        if (showEditDialog && selectedItem != null) {
+            EditItemDialog(
+                item = selectedItem!!,
+                onDismiss = { showEditDialog = false },
+                onSave = { updatedItem ->
+                    viewModel.updateItem(updatedItem)
+                    showEditDialog = false
+                }
+            )
+        }
     }
 }
+
+
+
 
 @Composable
 fun ShoppingItemCard(

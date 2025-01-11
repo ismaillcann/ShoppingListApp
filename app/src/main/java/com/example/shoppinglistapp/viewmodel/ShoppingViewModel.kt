@@ -1,17 +1,20 @@
 package com.example.shoppinglistapp.viewmodel
 
 import android.content.Context
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.shoppinglistapp.data.ShoppingItem
 import com.example.shoppinglistapp.network.NetworkUtils
 import com.example.shoppinglistapp.repository.ShoppingRepository
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 
 class ShoppingViewModel(private val repository: ShoppingRepository) : ViewModel() {
 
-    val shoppingItems = mutableStateOf<List<ShoppingItem>>(emptyList())
+    // Backing property for shoppingItems
+    private val _shoppingItems = MutableStateFlow<List<ShoppingItem>>(emptyList())
+    val shoppingItems: StateFlow<List<ShoppingItem>> = _shoppingItems
 
     fun fetchItems(context: Context) {
         viewModelScope.launch {
@@ -32,18 +35,25 @@ class ShoppingViewModel(private val repository: ShoppingRepository) : ViewModel(
                 } else {
                     println("Offline mode: Loading items from the database.")
                 }
-                shoppingItems.value = repository.getAllShoppingItems()
+                // Update the StateFlow
+                _shoppingItems.value = repository.getAllShoppingItems()
             } catch (e: Exception) {
                 println("Error fetching items: ${e.message}")
             }
         }
     }
 
+    fun updateItem(updatedItem: ShoppingItem) {
+        viewModelScope.launch {
+            repository.updateItem(updatedItem)
+            _shoppingItems.value = repository.getAllShoppingItems() // Refresh the list
+        }
+    }
 
     fun deleteItem(item: ShoppingItem) {
         viewModelScope.launch {
             repository.deleteItemById(item.id)
-            shoppingItems.value = repository.getAllShoppingItems()
+            _shoppingItems.value = repository.getAllShoppingItems() // Refresh the list
         }
     }
 }
