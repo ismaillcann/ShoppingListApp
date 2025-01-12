@@ -1,8 +1,10 @@
 package com.example.shoppinglistapp
 
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -35,12 +37,15 @@ import com.example.shoppinglistapp.viewmodel.ShoppingViewModel
 import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.layout.ContentScale
-
+import coil.compose.AsyncImage
+import org.jetbrains.annotations.Async
 
 
 class MainActivity : ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.M)
     override fun onCreate(savedInstanceState: Bundle?) {
         val db = ShoppingDatabase.getDatabase(this)
 
@@ -48,9 +53,9 @@ class MainActivity : ComponentActivity() {
             val dao = db.shoppingDao()
 
             // Pre-populate some items
-            dao.insertItem(ShoppingItem(name = "Milk", quantity = 2, price = 1.5))
-            dao.insertItem(ShoppingItem(name = "Bread", quantity = 1, price = 2.0))
-            dao.insertItem(ShoppingItem(name = "Butter", quantity = 3, price = 3.5))
+            //dao.insertItem(ShoppingItem(name = "Milk", quantity = 2, price = 1.5))
+            //dao.insertItem(ShoppingItem(name = "Bread", quantity = 1, price = 2.0))
+            //dao.insertItem(ShoppingItem(name = "Butter", quantity = 3, price = 3.5))
         }
 
         super.onCreate(savedInstanceState)
@@ -62,26 +67,15 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@RequiresApi(Build.VERSION_CODES.M)
 @Composable
 fun ShoppingListApp() {
-    val systemDarkTheme = isSystemInDarkTheme()
-    var isDarkTheme by remember { mutableStateOf(systemDarkTheme) }
     val navController = rememberNavController()
 
-    ShoppingListAppTheme(darkTheme = isDarkTheme) {
+    ShoppingListAppTheme {
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = { Text("Shopping List") },
-                    actions = {
-                        IconButton(onClick = { isDarkTheme = !isDarkTheme }) {
-                            Icon(
-                                imageVector = Icons.Default.Brightness6,
-                                contentDescription = "Toggle Theme"
-                            )
-                        }
-                    }
-                )
+                TopAppBar(title = { Text("Shopping List") })
             }
         ) { paddingValues ->
             NavHost(
@@ -93,13 +87,16 @@ fun ShoppingListApp() {
                     ShoppingListScreen(navController)
                 }
                 composable("details/{itemId}") { backStackEntry ->
-                    val itemId = backStackEntry.arguments?.getString("itemId")
-                    ShoppingDetailsScreen(itemId = itemId)
+                    val itemId = backStackEntry.arguments?.getString("itemId")?.toIntOrNull()
+                    itemId?.let {
+                        ShoppingDetailsScreen(itemId = it, navController = navController)
+                    }
                 }
             }
         }
     }
 }
+
 
 
 
@@ -172,6 +169,7 @@ fun EditItemDialog(
 
 
 
+@RequiresApi(Build.VERSION_CODES.M)
 @Composable
 fun ShoppingListScreen(navController: NavHostController) {
     val context = LocalContext.current
@@ -248,33 +246,32 @@ fun ShoppingItemCard(
     onDelete: (ShoppingItem) -> Unit,
     onEdit: (ShoppingItem) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
-            .clickable { expanded = !expanded }
+            .clickable {
+                navController.navigate("details/${item.id}")
+            }
             .animateContentSize(),
         elevation = 8.dp
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(text = item.name, style = MaterialTheme.typography.subtitle1)
-            if (expanded) {
-                Text(text = "Qty: ${item.quantity} Price: $${item.price}", style = MaterialTheme.typography.body2)
-                Row {
-                    IconButton(onClick = { onEdit(item) }) {
-                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    IconButton(onClick = { onDelete(item) }) {
-                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
-                    }
+            Text(text = "Qty: ${item.quantity} Price: $${item.price}", style = MaterialTheme.typography.body2)
+            Row {
+                IconButton(onClick = { onEdit(item) }) {
+                    Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                IconButton(onClick = { onDelete(item) }) {
+                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
                 }
             }
         }
     }
 }
+
 
 
 
@@ -309,7 +306,7 @@ fun ShoppingItemRow(
 }
 
 @Composable
-fun ShoppingDetailsScreen(itemId: String?) {
+fun ShoppingDetailsScreen(itemId: Int, navController: NavHostController) {
     val context = LocalContext.current
     val db = ShoppingDatabase.getDatabase(context)
     val dao = db.shoppingDao()
@@ -317,13 +314,20 @@ fun ShoppingDetailsScreen(itemId: String?) {
 
     // Load item details based on the ID
     LaunchedEffect(itemId) {
-        if (itemId != null) {
-            shoppingItem = dao.getItemById(itemId.toInt())
-        }
+        shoppingItem = dao.getItemById(itemId)
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Item Details") }) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Item Details") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(imageVector = Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -331,9 +335,9 @@ fun ShoppingDetailsScreen(itemId: String?) {
                 .padding(16.dp)
         ) {
             shoppingItem?.let {
-                // Display a larger image (placeholder used here)
-                Image(
-                    painter = painterResource(R.drawable.placeholder), // Replace with your image logic
+                // Display item details
+                AsyncImage(
+                    model = it.image,
                     contentDescription = "Item Image",
                     modifier = Modifier
                         .fillMaxWidth()
@@ -355,6 +359,8 @@ fun ShoppingDetailsScreen(itemId: String?) {
 
 
 
+
+@RequiresApi(Build.VERSION_CODES.M)
 @Preview(showBackground = true)
 @Composable
 fun DefaultPreview() {

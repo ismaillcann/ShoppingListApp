@@ -5,7 +5,7 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [ShoppingItem::class], version = 1)
+@Database(entities = [ShoppingItem::class], version = 2)
 abstract class ShoppingDatabase : RoomDatabase() {
 
     abstract fun shoppingDao(): ShoppingDao
@@ -20,10 +20,13 @@ abstract class ShoppingDatabase : RoomDatabase() {
                     context.applicationContext,
                     ShoppingDatabase::class.java,
                     "shopping_database"
-                ).build()
+                )
+                    .fallbackToDestructiveMigration() // Automatically handles migrations destructively
+                    .build()
                 INSTANCE = instance
                 instance
             }
         }
     }
 }
+

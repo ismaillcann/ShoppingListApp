@@ -31,7 +31,8 @@ class ShoppingViewModel(private val repository: ShoppingRepository) : ViewModel(
                                 id = apiItem.id,
                                 name = apiItem.title,
                                 quantity = 1, // Default quantity
-                                price = apiItem.price
+                                price = apiItem.price,
+                                image = apiItem.image
                             )
                         )
                     }
