@@ -3,6 +3,7 @@ package com.example.shoppinglistapp
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Brightness6
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.runtime.*
@@ -31,6 +33,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.example.shoppinglistapp.repository.ShoppingRepository
 import com.example.shoppinglistapp.viewmodel.ShoppingViewModel
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.layout.ContentScale
+
 
 
 class MainActivity : ComponentActivity() {
@@ -57,18 +64,44 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun ShoppingListApp() {
+    val systemDarkTheme = isSystemInDarkTheme()
+    var isDarkTheme by remember { mutableStateOf(systemDarkTheme) }
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = "list") {
-        composable("list") {
-            ShoppingListScreen(navController)
-        }
-        composable("details/{itemId}") { backStackEntry ->
-            val itemId = backStackEntry.arguments?.getString("itemId")
-            ShoppingDetailsScreen(itemId = itemId)
+    ShoppingListAppTheme(darkTheme = isDarkTheme) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = { Text("Shopping List") },
+                    actions = {
+                        IconButton(onClick = { isDarkTheme = !isDarkTheme }) {
+                            Icon(
+                                imageVector = Icons.Default.Brightness6,
+                                contentDescription = "Toggle Theme"
+                            )
+                        }
+                    }
+                )
+            }
+        ) { paddingValues ->
+            NavHost(
+                navController = navController,
+                startDestination = "list",
+                modifier = Modifier.padding(paddingValues)
+            ) {
+                composable("list") {
+                    ShoppingListScreen(navController)
+                }
+                composable("details/{itemId}") { backStackEntry ->
+                    val itemId = backStackEntry.arguments?.getString("itemId")
+                    ShoppingDetailsScreen(itemId = itemId)
+                }
+            }
         }
     }
 }
+
+
 
 @Composable
 fun EditItemDialog(
@@ -152,6 +185,7 @@ fun ShoppingListScreen(navController: NavHostController) {
 
     // Observe shopping items from the ViewModel
     val shoppingItems = viewModel.shoppingItems.collectAsState(emptyList())
+    //var isRefreshing by remember { mutableStateOf(false) }
 
     var selectedItem by remember { mutableStateOf<ShoppingItem?>(null) } // Use var for reassignment
     var showEditDialog by remember { mutableStateOf(false) }
@@ -162,7 +196,6 @@ fun ShoppingListScreen(navController: NavHostController) {
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Shopping List") }) },
         floatingActionButton = {
             FloatingActionButton(onClick = { /* Add new item logic */ }) {
                 Text("+")
@@ -215,30 +248,28 @@ fun ShoppingItemCard(
     onDelete: (ShoppingItem) -> Unit,
     onEdit: (ShoppingItem) -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
+
     Card(
-        elevation = 4.dp,
         modifier = Modifier
             .fillMaxWidth()
             .padding(8.dp)
-            .clickable { navController.navigate("details/${item.id}") }
+            .clickable { expanded = !expanded }
+            .animateContentSize(),
+        elevation = 8.dp
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = item.name, style = MaterialTheme.typography.h6)
-                Text(
-                    text = "Qty: ${item.quantity}, Price: $${item.price}",
-                    style = MaterialTheme.typography.body2
-                )
-            }
-            Row {
-                IconButton(onClick = { onEdit(item) }) {
-                    Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
-                }
-                IconButton(onClick = { onDelete(item) }) {
-                    Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(text = item.name, style = MaterialTheme.typography.subtitle1)
+            if (expanded) {
+                Text(text = "Qty: ${item.quantity} Price: $${item.price}", style = MaterialTheme.typography.body2)
+                Row {
+                    IconButton(onClick = { onEdit(item) }) {
+                        Icon(imageVector = Icons.Default.Edit, contentDescription = "Edit")
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(onClick = { onDelete(item) }) {
+                        Icon(imageVector = Icons.Default.Delete, contentDescription = "Delete")
+                    }
                 }
             }
         }
@@ -294,27 +325,34 @@ fun ShoppingDetailsScreen(itemId: String?) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Item Details") }) }
     ) { paddingValues ->
-        shoppingItem?.let {
-            Card(
-                elevation = 4.dp,
-                modifier = Modifier
-                    .padding(paddingValues)
-                    .padding(16.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("Name: ${it.name}", style = MaterialTheme.typography.h5)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Quantity: ${it.quantity}", style = MaterialTheme.typography.body1)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Price: $${it.price}", style = MaterialTheme.typography.body1)
-                }
-            }
-        } ?: Text(
-            "Loading item details...",
-            modifier = Modifier.padding(paddingValues).padding(16.dp)
-        )
+        Column(
+            modifier = Modifier
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
+            shoppingItem?.let {
+                // Display a larger image (placeholder used here)
+                Image(
+                    painter = painterResource(R.drawable.placeholder), // Replace with your image logic
+                    contentDescription = "Item Image",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                        .padding(bottom = 16.dp),
+                    contentScale = ContentScale.Crop
+                )
+                Text("Name: ${it.name}", style = MaterialTheme.typography.h5)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Quantity: ${it.quantity}", style = MaterialTheme.typography.body1)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Price: $${it.price}", style = MaterialTheme.typography.body1)
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Description: Sample item description here.", style = MaterialTheme.typography.body2)
+            } ?: Text("Loading item details...")
+        }
     }
 }
+
 
 
 @Preview(showBackground = true)

@@ -1,6 +1,8 @@
 package com.example.shoppinglistapp.viewmodel
 
 import android.content.Context
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.shoppinglistapp.data.ShoppingItem
@@ -16,6 +18,7 @@ class ShoppingViewModel(private val repository: ShoppingRepository) : ViewModel(
     private val _shoppingItems = MutableStateFlow<List<ShoppingItem>>(emptyList())
     val shoppingItems: StateFlow<List<ShoppingItem>> = _shoppingItems
 
+    @RequiresApi(Build.VERSION_CODES.M)
     fun fetchItems(context: Context) {
         viewModelScope.launch {
             try {

@@ -52,6 +52,10 @@ dependencies {
     // For TextField, KeyboardOptions, and Input Handling
     implementation("androidx.compose.ui:ui-text:1.7.6")
 
+    implementation("androidx.compose.material:material-icons-core:1.7.6")
+    implementation("androidx.compose.material:material-icons-extended:1.7.6")
+
+
     // Retrofit for Networking
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
@@ -66,6 +70,7 @@ dependencies {
     //Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 
+    implementation("com.google.accompanist:accompanist-swiperefresh:0.27.1")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
